@@ -1,14 +1,25 @@
 package main
 
 import (
-	"fmt"
 	"image-primitive/primitive"
+	"io"
+	"os"
 )
 
 func main() {
-	out, err := primitive.Primitive("tmp/starry_night.jpg", "out.png", 100, primitive.ModeTriangle)
+	image, err := os.Open("tmp/starry_night.jpg")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(out)
+	defer image.Close()
+	out, err := primitive.Transform(image, 50)
+	if err != nil {
+		panic(err)
+	}
+	os.Remove("out.jpg")
+	outFile, err := os.Create("out.jpg")
+	if err != nil {
+		panic(err)
+	}
+	io.Copy(outFile, out)
 }
