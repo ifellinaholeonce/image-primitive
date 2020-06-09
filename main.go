@@ -18,12 +18,13 @@ import (
 
 func main() {
 	err := godotenv.Load()
+	if err != nil {
+		// Don't panic when no env, for heroku.
+		fmt.Println("Error loading .env file")
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
-	}
-	if err != nil {
-		log.Fatal("Error loading .env file")
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
