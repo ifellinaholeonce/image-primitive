@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"image-primitive/primitive"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"primitive"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
