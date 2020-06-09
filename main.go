@@ -19,7 +19,7 @@ import (
 func main() {
 	err := godotenv.Load()
 	port := os.Getenv("PORT")
-	if port == nil {
+	if port == "" {
 		port = "3000"
 	}
 	if err != nil {
