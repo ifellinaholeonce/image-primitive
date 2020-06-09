@@ -26,15 +26,24 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		defer file.Close()
-		// TODO: Handle file extensions
-		ext := filepath.Ext(header.Filename)
-		_ = ext
-		out, err := primitive.Transform(file, 50)
+		ext := filepath.Ext(header.Filename)[1:]
+		out, err := primitive.Transform(file, ext, 50)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Content-Type", fmt.Sprintf("image/%s", handleExt(ext)))
 		io.Copy(w, out)
 	})
 	log.Fatal(http.ListenAndServe(":3000", mux))
+}
+
+func handleExt(ext string) string {
+	var ret string
+	switch ext {
+	case "jpg":
+		ret = "jpeg"
+	default:
+		ret = ext
+	}
+	return ret
 }

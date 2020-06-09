@@ -37,14 +37,14 @@ func WithMode(mode Mode) func() []string {
 
 // Transform takes an image does a primitive transformation. Returns a reader to
 // the resulting image.
-func Transform(image io.Reader, numShapes int, opts ...func() []string) (io.Reader, error) {
-	in, err := tempfile("jpg")
+func Transform(image io.Reader, ext string, numShapes int, opts ...func() []string) (io.Reader, error) {
+	in, err := tempfile(ext)
 	if err != nil {
 		// TODO: improve this error handling, perhaps retry?
 		return nil, err
 	}
 	defer os.Remove(in.Name())
-	out, err := tempfile("jpg")
+	out, err := tempfile(ext)
 	if err != nil {
 		// TODO: improve this error handling, perhaps retry?
 		return nil, err
@@ -56,7 +56,7 @@ func Transform(image io.Reader, numShapes int, opts ...func() []string) (io.Read
 		return nil, errors.New("failed to copy in image")
 	}
 
-	std, err := Primitive(in.Name(), out.Name(), numShapes, ModeEllipse)
+	std, err := primitive(in.Name(), out.Name(), numShapes, ModeEllipse)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func Transform(image io.Reader, numShapes int, opts ...func() []string) (io.Read
 	return b, nil
 }
 
-func Primitive(inputFile, outputFile string, numShapes int, mode Mode) (string, error) {
+func primitive(inputFile, outputFile string, numShapes int, mode Mode) (string, error) {
 	argStr := fmt.Sprintf("-i %s -o %s -n %d -m %d", inputFile, outputFile, numShapes, mode)
 	cmd := exec.Command("primitive", strings.Fields(argStr)...)
 	b, err := cmd.CombinedOutput()
