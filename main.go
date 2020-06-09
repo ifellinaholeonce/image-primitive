@@ -18,6 +18,10 @@ import (
 
 func main() {
 	err := godotenv.Load()
+	port := os.Getenv("PORT")
+	if port == nil {
+		port = "3000"
+	}
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
@@ -58,7 +62,7 @@ func main() {
 	})
 	fileServer := http.FileServer(http.Dir("./img/"))
 	mux.Handle("/img/", http.StripPrefix("/img", fileServer))
-	log.Fatal(http.ListenAndServe(":3000", mux))
+	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 
 func tempfile(ext string) (*os.File, error) {
