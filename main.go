@@ -9,9 +9,18 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := `<html></body>
@@ -43,6 +52,7 @@ func main() {
 
 		defer outFile.Close()
 		io.Copy(outFile, out)
+		writeToS3(outFile)
 		redirectURL := fmt.Sprintf("%s", outFile.Name())
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 	})
@@ -59,4 +69,32 @@ func tempfile(ext string) (*os.File, error) {
 	}
 	defer os.Remove(in.Name())
 	return os.Create(fmt.Sprintf("%s.%s", in.Name(), ext))
+}
+
+func writeToS3(file *os.File) {
+	s3Bucket := os.Getenv("AWS_S3_BUCKET")
+	item := file.Name()
+
+	// 2) Create an AWS session
+	sess, _ := session.NewSession(&aws.Config{
+		Region: aws.String("us-east-2"),
+	})
+
+	// 3) Create a new AWS S3 downloader
+	uploader := s3manager.NewUploader(sess)
+
+	uploadInput := &s3manager.UploadInput{
+		Bucket: &s3Bucket,
+		Key:    &item,
+		Body:   file,
+	}
+	fmt.Println("bucket", s3Bucket)
+	fmt.Println("key", item)
+	// 4) Upload the item from the bucket.
+	_, err := uploader.Upload(uploadInput)
+	if err != nil {
+		log.Fatalf("Unable to upload item %q, %v", item, err)
+	}
+
+	fmt.Println("Uploaded", item)
 }
