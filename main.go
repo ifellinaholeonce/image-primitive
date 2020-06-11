@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"primitive"
+	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -42,24 +43,43 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		defer file.Close()
-
 		ext := filepath.Ext(header.Filename)[1:]
-		out, err := primitive.Transform(file, ext, 50, primitive.WithMode(primitive.ModeCombo))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
 
-		outFile, err := tempfile(ext)
+		a, err := genImage(file, ext, 50, primitive.ModeBeziers)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		file.Seek(0, 0)
+		b, err := genImage(file, ext, 50, primitive.ModeCombo)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		file.Seek(0, 0)
+		c, err := genImage(file, ext, 50, primitive.ModeRotatedRect)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		file.Seek(0, 0)
+		d, err := genImage(file, ext, 50, primitive.ModeEllipse)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		file.Seek(0, 0)
 
-		defer outFile.Close()
-		io.Copy(outFile, out)
-		writeToS3(outFile)
-		redirectURL := fmt.Sprintf("%s", outFile.Name())
-		http.Redirect(w, r, redirectURL, http.StatusFound)
+		// writeToS3(outFile)
+		// redirectURL := fmt.Sprintf("%s", outFile.Name())
+		// http.Redirect(w, r, redirectURL, http.StatusFound)
+		html := `<html><body>
+		{{range .}}
+		  <img src="/{{.}}">
+		{{end}}
+		</body></html>`
+		tpl := template.Must(template.New("").Parse(html))
+		tpl.Execute(w, []string{a, b, c, d})
 	})
 	fileServer := http.FileServer(http.Dir("./img/"))
 	mux.Handle("/img/", http.StripPrefix("/img", fileServer))
@@ -74,6 +94,21 @@ func tempfile(ext string) (*os.File, error) {
 	}
 	defer os.Remove(in.Name())
 	return os.Create(fmt.Sprintf("%s.%s", in.Name(), ext))
+}
+
+func genImage(r io.Reader, ext string, numShapes int, mode primitive.Mode) (string, error) {
+	out, err := primitive.Transform(r, ext, numShapes, primitive.WithMode(mode))
+	if err != nil {
+		return "", err
+	}
+
+	outFile, err := tempfile(ext)
+	if err != nil {
+		return "", err
+	}
+	defer outFile.Close()
+	io.Copy(outFile, out)
+	return outFile.Name(), nil
 }
 
 func writeToS3(file *os.File) {
