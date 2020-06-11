@@ -38,6 +38,10 @@ func WithMode(mode Mode) func() []string {
 // Transform takes an image does a primitive transformation. Returns a reader to
 // the resulting image.
 func Transform(image io.Reader, ext string, numShapes int, opts ...func() []string) (io.Reader, error) {
+	var args []string
+	for _, opt := range opts {
+		args = append(args, opt()...)
+	}
 	in, err := tempfile(ext)
 	if err != nil {
 		// TODO: improve this error handling, perhaps retry?
@@ -56,7 +60,7 @@ func Transform(image io.Reader, ext string, numShapes int, opts ...func() []stri
 		return nil, errors.New("failed to copy in image")
 	}
 
-	std, err := primitive(in.Name(), out.Name(), numShapes, ModeEllipse)
+	std, err := primitive(in.Name(), out.Name(), numShapes, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,9 +75,10 @@ func Transform(image io.Reader, ext string, numShapes int, opts ...func() []stri
 	return b, nil
 }
 
-func primitive(inputFile, outputFile string, numShapes int, mode Mode) (string, error) {
-	argStr := fmt.Sprintf("-i %s -o %s -n %d -m %d", inputFile, outputFile, numShapes, mode)
-	cmd := exec.Command("primitive", strings.Fields(argStr)...)
+func primitive(inputFile, outputFile string, numShapes int, args ...string) (string, error) {
+	argStr := fmt.Sprintf("-i %s -o %s -n %d", inputFile, outputFile, numShapes)
+	args = append(strings.Fields(argStr), args...)
+	cmd := exec.Command("primitive", args...)
 	b, err := cmd.CombinedOutput()
 	return string(b), err
 }
