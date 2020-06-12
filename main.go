@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"primitive"
+	"strconv"
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -28,6 +29,27 @@ func main() {
 		port = "3000"
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/transform/", func(w http.ResponseWriter, r *http.Request) {
+		f, err := os.Open("./img/" + filepath.Base(r.URL.Path))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		defer f.Close()
+		ext := filepath.Ext(f.Name())
+		modeStr := r.FormValue("mode")
+		if modeStr == "" {
+			renderModeChoices(w, r, f, ext)
+			return
+		}
+		mode, err := strconv.Atoi(modeStr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = mode
+		// Render num shapes choices
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := `<html></body>
 		<form action="/upload" method="post" enctype="multipart/form-data">
@@ -44,42 +66,16 @@ func main() {
 		}
 		defer file.Close()
 		ext := filepath.Ext(header.Filename)[1:]
-
-		a, err := genImage(file, ext, 50, primitive.ModeBeziers)
+		onDisk, err := tempfile(ext)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			panic(err)
 		}
-		file.Seek(0, 0)
-		b, err := genImage(file, ext, 50, primitive.ModeCombo)
+		defer onDisk.Close()
+		_, err = io.Copy(onDisk, file)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			panic(err)
 		}
-		file.Seek(0, 0)
-		c, err := genImage(file, ext, 50, primitive.ModeRotatedRect)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		file.Seek(0, 0)
-		d, err := genImage(file, ext, 50, primitive.ModeEllipse)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		file.Seek(0, 0)
-
-		// writeToS3(outFile)
-		// redirectURL := fmt.Sprintf("%s", outFile.Name())
-		// http.Redirect(w, r, redirectURL, http.StatusFound)
-		html := `<html><body>
-		{{range .}}
-		  <img src="/{{.}}">
-		{{end}}
-		</body></html>`
-		tpl := template.Must(template.New("").Parse(html))
-		tpl.Execute(w, []string{a, b, c, d})
+		http.Redirect(w, r, "/transform/"+filepath.Base(onDisk.Name()), http.StatusFound)
 	})
 	fileServer := http.FileServer(http.Dir("./img/"))
 	mux.Handle("/img/", http.StripPrefix("/img", fileServer))
@@ -94,6 +90,53 @@ func tempfile(ext string) (*os.File, error) {
 	}
 	defer os.Remove(in.Name())
 	return os.Create(fmt.Sprintf("%s.%s", in.Name(), ext))
+}
+
+func renderModeChoices(w http.ResponseWriter, r *http.Request, f io.ReadSeeker, ext string) {
+	a, err := genImage(f, ext, 50, primitive.ModeBeziers)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	f.Seek(0, 0)
+	b, err := genImage(f, ext, 50, primitive.ModeCombo)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	f.Seek(0, 0)
+	c, err := genImage(f, ext, 50, primitive.ModeRotatedRect)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	f.Seek(0, 0)
+	d, err := genImage(f, ext, 50, primitive.ModeEllipse)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	html := `<html><body>
+		{{range .}}
+			<a href="/transform/{{.Name}}?mode={{.Mode}}">
+				<img style="width: 20%;" src="/img/{{.Name}}">
+			</a>
+		{{end}}
+		</body></html>`
+	data := []struct {
+		Name string
+		Mode primitive.Mode
+	}{
+		{Name: filepath.Base(a), Mode: primitive.ModeBeziers},
+		{Name: filepath.Base(b), Mode: primitive.ModeCircle},
+		{Name: filepath.Base(c), Mode: primitive.ModeTriangle},
+		{Name: filepath.Base(d), Mode: primitive.ModeCombo},
+	}
+	tpl := template.Must(template.New("").Parse(html))
+	err = tpl.Execute(w, data)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func genImage(r io.Reader, ext string, numShapes int, mode primitive.Mode) (string, error) {
