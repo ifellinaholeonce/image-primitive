@@ -52,7 +52,18 @@ func main() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		renderNumShapesChoices(w, r, f, ext, primitive.Mode(mode))
+		nStr := r.FormValue("n")
+		if nStr == "" {
+			renderNumShapesChoices(w, r, f, ext, primitive.Mode(mode))
+			return
+		}
+		numShapes, err := strconv.Atoi(nStr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = numShapes
+		http.Redirect(w, r, "/img/"+filepath.Base(f.Name()), http.StatusFound)
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := `<html></body>
