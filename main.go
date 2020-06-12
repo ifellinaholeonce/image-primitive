@@ -18,6 +18,11 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type genOpts struct {
+	N int
+	M primitive.Mode
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -47,8 +52,7 @@ func main() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		_ = mode
-		// Render num shapes choices
+		renderNumShapesChoices(w, r, f, ext, primitive.Mode(mode))
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := `<html></body>
@@ -92,30 +96,57 @@ func tempfile(ext string) (*os.File, error) {
 	return os.Create(fmt.Sprintf("%s.%s", in.Name(), ext))
 }
 
+func renderNumShapesChoices(w http.ResponseWriter, r *http.Request, f io.ReadSeeker, ext string, mode primitive.Mode) {
+	opts := []genOpts{
+		{N: 10, M: mode},
+		{N: 20, M: mode},
+		{N: 40, M: mode},
+		{N: 80, M: mode},
+	}
+	imgs, err := genImages(f, ext, opts...)
+	if err != nil {
+		panic(err)
+	}
+
+	html := `<html><body>
+		{{range .}}
+			<a href="/transform/{{.Name}}?mode={{.Mode}}&n={{.NumShapes}}">
+				<img style="width: 20%;" src="/img/{{.Name}}">
+			</a>
+		{{end}}
+		</body></html>`
+	type dataStruct struct {
+		Name      string
+		Mode      primitive.Mode
+		NumShapes int
+	}
+	var data []dataStruct
+	for i, img := range imgs {
+		data = append(data, dataStruct{
+			Name:      filepath.Base(img),
+			Mode:      opts[i].M,
+			NumShapes: opts[i].N,
+		})
+	}
+	tpl := template.Must(template.New("").Parse(html))
+	err = tpl.Execute(w, data)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func renderModeChoices(w http.ResponseWriter, r *http.Request, f io.ReadSeeker, ext string) {
-	a, err := genImage(f, ext, 50, primitive.ModeBeziers)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	opts := []genOpts{
+		{N: 50, M: primitive.ModeBeziers},
+		{N: 50, M: primitive.ModeCombo},
+		{N: 50, M: primitive.ModeRotatedRect},
+		{N: 50, M: primitive.ModeRotatedEllipse},
 	}
-	f.Seek(0, 0)
-	b, err := genImage(f, ext, 50, primitive.ModeCombo)
+	imgs, err := genImages(f, ext, opts...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		panic(err)
 	}
-	f.Seek(0, 0)
-	c, err := genImage(f, ext, 50, primitive.ModeRotatedRect)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	f.Seek(0, 0)
-	d, err := genImage(f, ext, 50, primitive.ModeEllipse)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+
 	html := `<html><body>
 		{{range .}}
 			<a href="/transform/{{.Name}}?mode={{.Mode}}">
@@ -123,20 +154,35 @@ func renderModeChoices(w http.ResponseWriter, r *http.Request, f io.ReadSeeker, 
 			</a>
 		{{end}}
 		</body></html>`
-	data := []struct {
+	type dataStruct struct {
 		Name string
 		Mode primitive.Mode
-	}{
-		{Name: filepath.Base(a), Mode: primitive.ModeBeziers},
-		{Name: filepath.Base(b), Mode: primitive.ModeCircle},
-		{Name: filepath.Base(c), Mode: primitive.ModeTriangle},
-		{Name: filepath.Base(d), Mode: primitive.ModeCombo},
+	}
+	var data []dataStruct
+	for i, img := range imgs {
+		data = append(data, dataStruct{
+			Name: filepath.Base(img),
+			Mode: opts[i].M,
+		})
 	}
 	tpl := template.Must(template.New("").Parse(html))
 	err = tpl.Execute(w, data)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func genImages(rs io.ReadSeeker, ext string, opts ...genOpts) ([]string, error) {
+	var ret []string
+	for _, opt := range opts {
+		rs.Seek(0, 0)
+		f, err := genImage(rs, ext, opt.N, opt.M)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, f)
+	}
+	return ret, nil
 }
 
 func genImage(r io.Reader, ext string, numShapes int, mode primitive.Mode) (string, error) {
