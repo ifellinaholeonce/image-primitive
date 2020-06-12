@@ -36,7 +36,7 @@ func main() {
 			return
 		}
 		defer f.Close()
-		ext := filepath.Ext(f.Name())
+		ext := filepath.Ext(f.Name())[1:]
 		modeStr := r.FormValue("mode")
 		if modeStr == "" {
 			renderModeChoices(w, r, f, ext)
