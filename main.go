@@ -110,9 +110,9 @@ func tempfile(ext string) (*os.File, error) {
 func renderNumShapesChoices(w http.ResponseWriter, r *http.Request, f io.ReadSeeker, ext string, mode primitive.Mode) {
 	opts := []genOpts{
 		{N: 10, M: mode},
-		{N: 20, M: mode},
-		{N: 40, M: mode},
-		{N: 80, M: mode},
+		// {N: 20, M: mode},
+		// {N: 40, M: mode},
+		// {N: 80, M: mode},
 	}
 	imgs, err := genImages(f, ext, opts...)
 	if err != nil {
@@ -149,9 +149,9 @@ func renderNumShapesChoices(w http.ResponseWriter, r *http.Request, f io.ReadSee
 func renderModeChoices(w http.ResponseWriter, r *http.Request, f io.ReadSeeker, ext string) {
 	opts := []genOpts{
 		{N: 50, M: primitive.ModeBeziers},
-		{N: 50, M: primitive.ModeCombo},
-		{N: 50, M: primitive.ModeRotatedRect},
-		{N: 50, M: primitive.ModeRotatedEllipse},
+		// {N: 50, M: primitive.ModeCombo},
+		// {N: 50, M: primitive.ModeRotatedRect},
+		// {N: 50, M: primitive.ModeRotatedEllipse},
 	}
 	imgs, err := genImages(f, ext, opts...)
 	if err != nil {
