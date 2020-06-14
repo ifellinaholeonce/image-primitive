@@ -11,6 +11,7 @@ import (
 	"primitive"
 	"strconv"
 	"text/template"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -24,6 +25,23 @@ type genOpts struct {
 }
 
 func main() {
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		for {
+			<-ticker.C
+			files, err := ioutil.ReadDir("./img/")
+			for _, file := range files {
+				ageLimit := time.Now().Add(time.Duration(-10 * time.Minute))
+				if file.ModTime().Before(ageLimit) {
+					os.Remove(file.Name())
+					fmt.Printf("Removed %v \n", file.Name())
+				}
+			}
+			if err != nil {
+				panic(err)
+			}
+		}
+	}()
 	err := godotenv.Load()
 	if err != nil {
 		// Don't panic when no env, for heroku.
@@ -65,6 +83,7 @@ func main() {
 		_ = numShapes
 		http.Redirect(w, r, "/img/"+filepath.Base(f.Name()), http.StatusFound)
 	})
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := `<html></body>
 		<form action="/upload" method="post" enctype="multipart/form-data">
@@ -74,6 +93,7 @@ func main() {
 		</body></html>`
 		fmt.Fprint(w, html)
 	})
+
 	mux.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
 		file, header, err := r.FormFile("image")
 		if err != nil {
