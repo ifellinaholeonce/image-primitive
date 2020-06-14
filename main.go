@@ -20,8 +20,9 @@ import (
 )
 
 type genOpts struct {
-	N int
-	M primitive.Mode
+	N        int
+	M        primitive.Mode
+	FilePath string
 }
 
 func main() {
@@ -95,12 +96,30 @@ func main() {
 		ext := filepath.Ext(f.Name())[1:]
 		modeStr := r.FormValue("mode")
 		if modeStr == "" {
-			go renderModeChoices(w, r, f.Name(), ext)
+			opts := []genOpts{
+				{N: 50, M: primitive.ModeBeziers},
+				{N: 50, M: primitive.ModeCombo},
+				{N: 50, M: primitive.ModeRotatedRect},
+				{N: 50, M: primitive.ModeRotatedEllipse},
+			}
+			for i := range opts {
+				file, err := tempfile(ext)
+				if err != nil {
+					panic(err)
+				}
+				opts[i].FilePath = file.Name()
+			}
+			go renderModeChoices(w, r, f.Name(), ext, opts...)
 			html := `<html><body>
-			<p>This is going to be the file name: {{.}}</p>
+			<p>The names are going to be:</p>
+			<ul>
+				{{range.}}
+				<li>{{.FilePath}}</li>
+				{{end}}
+			</ul>
 			</body></html>`
 			tpl := template.Must(template.New("").Parse(html))
-			err = tpl.Execute(w, "test")
+			err = tpl.Execute(w, opts)
 			if err != nil {
 				panic(err)
 			}
@@ -179,54 +198,49 @@ func renderNumShapesChoices(w http.ResponseWriter, r *http.Request, f io.ReadSee
 	}
 }
 
-func renderModeChoices(w http.ResponseWriter, r *http.Request, imgPath string, ext string) {
+func renderModeChoices(w http.ResponseWriter, r *http.Request, imgPath string, ext string, opts ...genOpts) {
 	f, err := os.Open(imgPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	defer f.Close()
-	opts := []genOpts{
-		{N: 50, M: primitive.ModeBeziers},
-		{N: 50, M: primitive.ModeCombo},
-		{N: 50, M: primitive.ModeRotatedRect},
-		{N: 50, M: primitive.ModeRotatedEllipse},
-	}
 	imgs, err := genImages(f, ext, opts...)
 	if err != nil {
 		panic(err)
 	}
-
-	html := `<html><body>
-		{{range .}}
-			<a href="/transform/{{.Name}}?mode={{.Mode}}">
-				<img style="width: 20%;" src="/img/{{.Name}}">
-			</a>
-		{{end}}
-		</body></html>`
-	type dataStruct struct {
-		Name string
-		Mode primitive.Mode
-	}
-	var data []dataStruct
-	for i, img := range imgs {
-		data = append(data, dataStruct{
-			Name: filepath.Base(img),
-			Mode: opts[i].M,
-		})
-	}
-	tpl := template.Must(template.New("").Parse(html))
-	err = tpl.Execute(w, data)
-	if err != nil {
-		panic(err)
-	}
+	_ = imgs
+	// TODO: Return this HTML async
+	// html := `<html><body>
+	// 	{{range .}}
+	// 		<a href="/transform/{{.Name}}?mode={{.Mode}}">
+	// 			<img style="width: 20%;" src="/img/{{.Name}}">
+	// 		</a>
+	// 	{{end}}
+	// 	</body></html>`
+	// type dataStruct struct {
+	// 	Name string
+	// 	Mode primitive.Mode
+	// }
+	// var data []dataStruct
+	// for i, img := range imgs {
+	// 	data = append(data, dataStruct{
+	// 		Name: filepath.Base(img),
+	// 		Mode: opts[i].M,
+	// 	})
+	// }
+	// tpl := template.Must(template.New("").Parse(html))
+	// err = tpl.Execute(w, data)
+	// if err != nil {
+	// 	panic(err)
+	// }
 }
 
 func genImages(rs io.ReadSeeker, ext string, opts ...genOpts) ([]string, error) {
 	var ret []string
 	for _, opt := range opts {
 		rs.Seek(0, 0)
-		f, err := genImage(rs, ext, opt.N, opt.M)
+		f, err := genImage(rs, ext, opt.N, opt.M, opt.FilePath)
 		if err != nil {
 			return nil, err
 		}
@@ -235,18 +249,21 @@ func genImages(rs io.ReadSeeker, ext string, opts ...genOpts) ([]string, error) 
 	return ret, nil
 }
 
-func genImage(r io.Reader, ext string, numShapes int, mode primitive.Mode) (string, error) {
+func genImage(r io.Reader, ext string, numShapes int, mode primitive.Mode, outFilePath string) (string, error) {
 	out, err := primitive.Transform(r, ext, numShapes, primitive.WithMode(mode))
 	if err != nil {
 		return "", err
 	}
 
-	outFile, err := tempfile(ext)
+	outFile, err := os.Create(outFilePath)
 	if err != nil {
 		return "", err
 	}
 	defer outFile.Close()
-	io.Copy(outFile, out)
+	_, err = io.Copy(outFile, out)
+	if err != nil {
+		panic(err)
+	}
 	return outFile.Name(), nil
 }
 
