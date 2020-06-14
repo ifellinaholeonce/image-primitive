@@ -123,12 +123,12 @@ func main() {
 					<script type="text/javascript">
 						async function getImg() {
 							console.log("loaded script for {{.}}")
-							await sleep(10000)
+							await sleep(40000)
 							console.log("fetching {{.}}")
 							el = document.getElementById("{{.}}")
 							var img = document.createElement('img')
 							img.src = "http://localhost:3000/img/{{.}}.jpg"
-							img.id = {{.}}
+							img.id = "{{.}}"
 							el.parentNode.replaceChild(img, el)
 						}
 						getImg()
