@@ -33,7 +33,10 @@ func main() {
 			for _, file := range files {
 				ageLimit := time.Now().Add(time.Duration(-10 * time.Minute))
 				if file.ModTime().Before(ageLimit) {
-					os.Remove(file.Name())
+					err := os.Remove("./img/" + file.Name())
+					if err != nil {
+						panic(err)
+					}
 					fmt.Printf("Removed %v \n", file.Name())
 				}
 			}
