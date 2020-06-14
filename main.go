@@ -111,13 +111,31 @@ func main() {
 			}
 			go renderModeChoices(w, r, f.Name(), ext, opts...)
 			html := `<html><body>
+			<script type="text/javascript">
+				function sleep(ms) {
+					return new Promise(resolve => setTimeout(resolve, ms));
+				}
+			</script>
 			<p>The names are going to be:</p>
 			<ul>
 				{{range.}}
-				<li id="{{.}}">{{.}}</li>
+					<li id="{{.}}">{{.}}</li>
+					<script type="text/javascript">
+						async function getImg() {
+							console.log("loaded script for {{.}}")
+							await sleep(10000)
+							console.log("fetching {{.}}")
+							el = document.getElementById("{{.}}")
+							var img = document.createElement('img')
+							img.src = "http://localhost:3000/img/{{.}}.jpg"
+							img.id = {{.}}
+							el.parentNode.replaceChild(img, el)
+						}
+						getImg()
+					</script>
 				{{end}}
-			</ul>
-			</body></html>`
+				</ul>
+				</body></html>`
 			tpl := template.Must(template.New("").Parse(html))
 			var fingerprints []string
 			for _, opt := range opts {
