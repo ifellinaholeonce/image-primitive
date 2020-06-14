@@ -114,12 +114,17 @@ func main() {
 			<p>The names are going to be:</p>
 			<ul>
 				{{range.}}
-				<li>{{.FilePath}}</li>
+				<li id="{{.}}">{{.}}</li>
 				{{end}}
 			</ul>
 			</body></html>`
 			tpl := template.Must(template.New("").Parse(html))
-			err = tpl.Execute(w, opts)
+			var fingerprints []string
+			for _, opt := range opts {
+				base := filepath.Base(opt.FilePath)
+				fingerprints = append(fingerprints, base[0:len(base)-(len(ext)+1)])
+			}
+			err = tpl.Execute(w, fingerprints)
 			if err != nil {
 				panic(err)
 			}
