@@ -55,43 +55,12 @@ func main() {
 		port = "3000"
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/transform/", func(w http.ResponseWriter, r *http.Request) {
-		f, err := os.Open("./img/" + filepath.Base(r.URL.Path))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		defer f.Close()
-		ext := filepath.Ext(f.Name())[1:]
-		modeStr := r.FormValue("mode")
-		if modeStr == "" {
-			renderModeChoices(w, r, f, ext)
-			return
-		}
-		mode, err := strconv.Atoi(modeStr)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		nStr := r.FormValue("n")
-		if nStr == "" {
-			renderNumShapesChoices(w, r, f, ext, primitive.Mode(mode))
-			return
-		}
-		numShapes, err := strconv.Atoi(nStr)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		_ = numShapes
-		http.Redirect(w, r, "/img/"+filepath.Base(f.Name()), http.StatusFound)
-	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := `<html></body>
 		<form action="/upload" method="post" enctype="multipart/form-data">
-			<input name="image" type="file">
-			<button type="submit">Upload Image</button>
+		<input name="image" type="file">
+		<button type="submit">Upload Image</button>
 		</form>
 		</body></html>`
 		fmt.Fprint(w, html)
@@ -115,6 +84,47 @@ func main() {
 		}
 		http.Redirect(w, r, "/transform/"+filepath.Base(onDisk.Name()), http.StatusFound)
 	})
+
+	mux.HandleFunc("/transform/", func(w http.ResponseWriter, r *http.Request) {
+		f, err := os.Open("./img/" + filepath.Base(r.URL.Path))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		defer f.Close()
+		ext := filepath.Ext(f.Name())[1:]
+		modeStr := r.FormValue("mode")
+		if modeStr == "" {
+			go renderModeChoices(w, r, f.Name(), ext)
+			html := `<html><body>
+			<p>This is going to be the file name: {{.}}</p>
+			</body></html>`
+			tpl := template.Must(template.New("").Parse(html))
+			err = tpl.Execute(w, "test")
+			if err != nil {
+				panic(err)
+			}
+			return
+		}
+		mode, err := strconv.Atoi(modeStr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		nStr := r.FormValue("n")
+		if nStr == "" {
+			renderNumShapesChoices(w, r, f, ext, primitive.Mode(mode))
+			return
+		}
+		numShapes, err := strconv.Atoi(nStr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = numShapes
+		http.Redirect(w, r, "/img/"+filepath.Base(f.Name()), http.StatusFound)
+	})
+
 	fileServer := http.FileServer(http.Dir("./img/"))
 	mux.Handle("/img/", http.StripPrefix("/img", fileServer))
 	log.Fatal(http.ListenAndServe(":"+port, mux))
@@ -169,12 +179,18 @@ func renderNumShapesChoices(w http.ResponseWriter, r *http.Request, f io.ReadSee
 	}
 }
 
-func renderModeChoices(w http.ResponseWriter, r *http.Request, f io.ReadSeeker, ext string) {
+func renderModeChoices(w http.ResponseWriter, r *http.Request, imgPath string, ext string) {
+	f, err := os.Open(imgPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	defer f.Close()
 	opts := []genOpts{
 		{N: 50, M: primitive.ModeBeziers},
-		// {N: 50, M: primitive.ModeCombo},
-		// {N: 50, M: primitive.ModeRotatedRect},
-		// {N: 50, M: primitive.ModeRotatedEllipse},
+		{N: 50, M: primitive.ModeCombo},
+		{N: 50, M: primitive.ModeRotatedRect},
+		{N: 50, M: primitive.ModeRotatedEllipse},
 	}
 	imgs, err := genImages(f, ext, opts...)
 	if err != nil {
