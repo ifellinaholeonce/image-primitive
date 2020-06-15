@@ -111,31 +111,55 @@ func main() {
 			}
 			go renderModeChoices(w, r, f.Name(), ext, opts...)
 			html := `<html><body>
+			<link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
 			<script type="text/javascript">
-				function sleep(ms) {
+				async function sleep(ms) {
 					return new Promise(resolve => setTimeout(resolve, ms));
+				}
+			</script>
+			<script>
+				function fetchRetry(url, delay, tries) {
+						function onError(err){
+								triesLeft = tries - 1;
+								if(!triesLeft){
+										throw err;
+								}
+								return sleep(delay).then(() => fetchRetry(url, delay, triesLeft));
+						}
+						return fetch(url).then((res) => {
+						if (res.ok) {
+								return url
+							}
+							throw new Error("HTTP status " + res.status)
+						})
+						.catch(onError);
 				}
 			</script>
 			<p>The names are going to be:</p>
 			<ul>
 				{{range.}}
-					<li id="{{.}}">{{.}}</li>
-					<script type="text/javascript">
-						async function getImg() {
-							console.log("loaded script for {{.}}")
-							await sleep(40000)
-							console.log("fetching {{.}}")
+					<li id="{{.}}"><i class="fa fa-spinner fa-spin" style="font-size:24px"></i></li>
+				{{end}}
+			</ul>
+			<script type="text/javascript">
+				async function getImg() {
+					await sleep(10000)
+					{{range.}}
+						console.log("loaded script for {{.}}")
+						console.log("fetching {{.}}")
+						await fetchRetry("http://localhost:3000/img/out_{{.}}.jpg", 2000, 10).then((val) => {
 							el = document.getElementById("{{.}}")
 							var img = document.createElement('img')
-							img.src = "http://localhost:3000/img/{{.}}.jpg"
+							img.src = "http://localhost:3000/img/out_{{.}}.jpg"
+							img.style.width = "20%;"
 							img.id = "{{.}}"
 							el.parentNode.replaceChild(img, el)
-						}
-						getImg()
-					</script>
-				{{end}}
-				</ul>
-				</body></html>`
+						})
+					{{end}}
+				}
+				getImg()
+			</script>
+			</body></html>`
 			tpl := template.Must(template.New("").Parse(html))
 			var fingerprints []string
 			for _, opt := range opts {
@@ -173,7 +197,7 @@ func main() {
 }
 
 func tempfile(ext string) (*os.File, error) {
-	in, err := ioutil.TempFile("./img/", "out_")
+	in, err := ioutil.TempFile("./img/", "")
 	if err != nil {
 		// TODO: improve this error handling, perhaps retry?
 		return nil, err
@@ -277,8 +301,8 @@ func genImage(r io.Reader, ext string, numShapes int, mode primitive.Mode, outFi
 	if err != nil {
 		return "", err
 	}
-
-	outFile, err := os.Create(outFilePath)
+	dir, fName := filepath.Split(outFilePath)
+	outFile, err := os.Create(dir + "out_" + fName)
 	if err != nil {
 		return "", err
 	}
