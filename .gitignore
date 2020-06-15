@@ -1,4 +1,7 @@
 .DS_STORE
 tmp/*
+img/*.jpg
+img/*.jpeg
+img/*.png
 out*
 .env
