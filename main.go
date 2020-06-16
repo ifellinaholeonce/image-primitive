@@ -25,6 +25,7 @@ type genOpts struct {
 	FilePath    string
 	Name        string
 	Fingerprint string
+	Host        string
 }
 
 func main() {
@@ -130,6 +131,7 @@ func main() {
 			opts[i].FilePath = file.Name()
 			opts[i].Name = filepath.Base(r.URL.Path)
 			opts[i].Fingerprint = base[0 : len(base)-(len(ext)+1)]
+			opts[i].Host = os.Getenv("HOST")
 		}
 		go renderModeChoices(w, r, f.Name(), ext, opts...)
 		tpl := buildTemplate()
@@ -266,12 +268,12 @@ func buildTemplate() *template.Template {
 				async function getImg() {
 					await sleep(10000)
 					{{range.}}
-						await fetchRetry("http://localhost:3000/img/out_{{.Fingerprint}}.jpg", 2000, 10).then((val) => {
+						await fetchRetry("{{.Host}}/img/out_{{.Fingerprint}}.jpg", 2000, 20).then((val) => {
 							el = document.getElementById("{{.Fingerprint}}")
 							link = document.createElement('a')
 							link.href = "/transform/{{.Name}}?mode={{.M}}"
 							var img = document.createElement('img')
-							img.src = "http://localhost:3000/img/out_{{.Fingerprint}}.jpg"
+							img.src = "{{.Host}}/img/out_{{.Fingerprint}}.jpg"
 							img.style.width = "20%;"
 							img.id = "{{.Fingerprint}}"
 							el.parentNode.replaceChild(link, el)
