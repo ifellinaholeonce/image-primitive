@@ -128,7 +128,7 @@ func main() {
 			}
 			base := filepath.Base(file.Name())
 			opts[i].FilePath = file.Name()
-			opts[i].Name = base
+			opts[i].Name = filepath.Base(r.URL.Path)
 			opts[i].Fingerprint = base[0 : len(base)-(len(ext)+1)]
 		}
 		go renderModeChoices(w, r, f.Name(), ext, opts...)
