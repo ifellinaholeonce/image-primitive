@@ -26,6 +26,8 @@ type genOpts struct {
 	Name        string
 	Fingerprint string
 	Host        string
+	ShowM       bool
+	ShowN       bool
 }
 
 func main() {
@@ -96,18 +98,21 @@ func main() {
 			return
 		}
 		defer f.Close()
+
 		ext := filepath.Ext(f.Name())[1:]
 		var opts []genOpts
+
 		modeStr := r.FormValue("mode")
 		if modeStr == "" {
 			DEFAULT_NUM := 10
 			opts = []genOpts{
-				{N: DEFAULT_NUM, M: primitive.ModeBeziers},
-				{N: DEFAULT_NUM, M: primitive.ModeCombo},
-				{N: DEFAULT_NUM, M: primitive.ModeRotatedRect},
-				{N: DEFAULT_NUM, M: primitive.ModeRotatedEllipse},
+				{N: DEFAULT_NUM, M: primitive.ModeBeziers, ShowM: true},
+				{N: DEFAULT_NUM, M: primitive.ModeCombo, ShowM: true},
+				{N: DEFAULT_NUM, M: primitive.ModeRotatedRect, ShowM: true},
+				{N: DEFAULT_NUM, M: primitive.ModeRotatedEllipse, ShowM: true},
 			}
 		}
+
 		nStr := r.FormValue("n")
 		if nStr == "" && modeStr != "" {
 			mode, err := strconv.Atoi(modeStr)
@@ -116,10 +121,10 @@ func main() {
 				return
 			}
 			opts = []genOpts{
-				{N: 10, M: primitive.Mode(mode)},
-				{N: 20, M: primitive.Mode(mode)},
-				{N: 40, M: primitive.Mode(mode)},
-				{N: 80, M: primitive.Mode(mode)},
+				{N: 10, M: primitive.Mode(mode), ShowM: true, ShowN: true},
+				{N: 20, M: primitive.Mode(mode), ShowM: true, ShowN: true},
+				{N: 40, M: primitive.Mode(mode), ShowM: true, ShowN: true},
+				{N: 80, M: primitive.Mode(mode), ShowM: true, ShowN: true},
 			}
 		}
 		for i := range opts {
@@ -133,13 +138,14 @@ func main() {
 			opts[i].Fingerprint = base[0 : len(base)-(len(ext)+1)]
 			opts[i].Host = os.Getenv("HOST")
 		}
+
 		go renderModeChoices(w, r, f.Name(), ext, opts...)
+
 		tpl := buildTemplate()
 		err = tpl.Execute(w, opts)
 		if err != nil {
 			panic(err)
 		}
-		// http.Redirect(w, r, "/img/"+filepath.Base(f.Name()), http.StatusFound)
 	})
 
 	fileServer := http.FileServer(http.Dir("./img/"))
@@ -267,11 +273,11 @@ func buildTemplate() *template.Template {
 			<script type="text/javascript">
 				async function getImg() {
 					await sleep(10000)
-					{{range.}}
+					{{range .}}
 						await fetchRetry("{{.Host}}/img/out_{{.Fingerprint}}.jpg", 2000, 20).then((val) => {
 							el = document.getElementById("{{.Fingerprint}}")
 							link = document.createElement('a')
-							link.href = "/transform/{{.Name}}?mode={{.M}}"
+							link.href = "/transform/{{.Name}}?{{if .ShowM}}mode={{.M}}{{end}}{{if .ShowN}}&n={{.N}}{{end}}"
 							var img = document.createElement('img')
 							img.src = "{{.Host}}/img/out_{{.Fingerprint}}.jpg"
 							img.style.width = "20%;"
