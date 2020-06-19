@@ -92,6 +92,12 @@ func main() {
 	})
 
 	mux.HandleFunc("/transform/", func(w http.ResponseWriter, r *http.Request) {
+		// If we are all out of transforms to do, return the final image.
+		if r.FormValue("mode") != "" && r.FormValue("n") != "" {
+			http.Redirect(w, r, "/img/out_"+r.FormValue("id")+".jpg", http.StatusFound)
+			return
+		}
+
 		f, err := os.Open("./img/" + filepath.Base(r.URL.Path))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -277,7 +283,7 @@ func buildTemplate() *template.Template {
 						await fetchRetry("{{.Host}}/img/out_{{.Fingerprint}}.jpg", 2000, 20).then((val) => {
 							el = document.getElementById("{{.Fingerprint}}")
 							link = document.createElement('a')
-							link.href = "/transform/{{.Name}}?{{if .ShowM}}mode={{.M}}{{end}}{{if .ShowN}}&n={{.N}}{{end}}"
+							link.href = "/transform/{{.Name}}?id={{.Fingerprint}}{{if .ShowM}}&mode={{.M}}{{end}}{{if .ShowN}}&n={{.N}}{{end}}"
 							var img = document.createElement('img')
 							img.src = "{{.Host}}/img/out_{{.Fingerprint}}.jpg"
 							img.style.width = "20%;"
