@@ -64,12 +64,37 @@ func main() {
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := `<html></body>
+		<p>Transform an image</p>
 		<form action="/upload" method="post" enctype="multipart/form-data">
+		<input name="image" type="file">
+		<button type="submit">Upload Image</button>
+		</form>
+		<p> Or watch it happen!</p>
+		<form action="/gif/upload" method="post" enctype="multipart/form-data">
 		<input name="image" type="file">
 		<button type="submit">Upload Image</button>
 		</form>
 		</body></html>`
 		fmt.Fprint(w, html)
+	})
+
+	mux.HandleFunc("/gif/upload", func(w http.ResponseWriter, r *http.Request) {
+		file, header, err := r.FormFile("image")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		defer file.Close()
+		ext := filepath.Ext(header.Filename)[1:]
+		onDisk, err := tempfile(ext)
+		if err != nil {
+			panic(err)
+		}
+		defer onDisk.Close()
+		_, err = io.Copy(onDisk, file)
+		if err != nil {
+			panic(err)
+		}
+		http.Redirect(w, r, "/gif/transform/"+filepath.Base(onDisk.Name()), http.StatusFound)
 	})
 
 	mux.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +114,69 @@ func main() {
 			panic(err)
 		}
 		http.Redirect(w, r, "/transform/"+filepath.Base(onDisk.Name()), http.StatusFound)
+	})
+
+	mux.HandleFunc("/gif/transform/", func(w http.ResponseWriter, r *http.Request) {
+		// If we are all out of transforms to do, return the final image.
+		if r.FormValue("mode") != "" && r.FormValue("n") != "" {
+			http.Redirect(w, r, "/img/out_"+r.FormValue("id")+".gif", http.StatusFound)
+			return
+		}
+
+		f, err := os.Open("./img/" + filepath.Base(r.URL.Path))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		defer f.Close()
+
+		ext := filepath.Ext(f.Name())[1:]
+		var opts []genOpts
+
+		modeStr := r.FormValue("mode")
+		if modeStr == "" {
+			DEFAULT_NUM := 10
+			opts = []genOpts{
+				{N: DEFAULT_NUM, M: primitive.ModeCircle, ShowM: true},
+				{N: DEFAULT_NUM, M: primitive.ModeCombo, ShowM: true},
+				{N: DEFAULT_NUM, M: primitive.ModeRotatedRect, ShowM: true},
+				{N: DEFAULT_NUM, M: primitive.ModeTriangle, ShowM: true},
+			}
+		}
+
+		nStr := r.FormValue("n")
+		if nStr == "" && modeStr != "" {
+			mode, err := strconv.Atoi(modeStr)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			opts = []genOpts{
+				{N: 10, M: primitive.Mode(mode), ShowM: true, ShowN: true},
+				{N: 20, M: primitive.Mode(mode), ShowM: true, ShowN: true},
+				{N: 40, M: primitive.Mode(mode), ShowM: true, ShowN: true},
+				{N: 80, M: primitive.Mode(mode), ShowM: true, ShowN: true},
+			}
+		}
+		for i := range opts {
+			file, err := tempfile(ext)
+			if err != nil {
+				panic(err)
+			}
+			base := filepath.Base(file.Name())
+			opts[i].FilePath = file.Name()
+			opts[i].Name = filepath.Base(r.URL.Path)
+			opts[i].Fingerprint = base[0 : len(base)-(len(ext)+1)]
+			opts[i].Host = os.Getenv("HOST")
+		}
+
+		go renderGifs(w, r, f.Name(), ext, opts...)
+
+		tpl := buildTemplate()
+		err = tpl.Execute(w, opts)
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	mux.HandleFunc("/transform/", func(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +271,33 @@ func renderModeChoices(w http.ResponseWriter, r *http.Request, imgPath string, e
 	_ = imgs
 }
 
+func renderGifs(w http.ResponseWriter, r *http.Request, imgPath string, ext string, opts ...genOpts) {
+	f, err := os.Open(imgPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+	imgs, err := genGifs(f, ext, opts...)
+	if err != nil {
+		panic(err)
+	}
+	_ = imgs
+}
+
+func genGifs(rs io.ReadSeeker, ext string, opts ...genOpts) ([]string, error) {
+	var ret []string
+	for _, opt := range opts {
+		rs.Seek(0, 0)
+		f, err := genGif(rs, ext, opt.N, opt.M, opt.FilePath)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, f)
+	}
+	return ret, nil
+}
+
 func genImages(rs io.ReadSeeker, ext string, opts ...genOpts) ([]string, error) {
 	var ret []string
 	for _, opt := range opts {
@@ -194,6 +309,26 @@ func genImages(rs io.ReadSeeker, ext string, opts ...genOpts) ([]string, error) 
 		ret = append(ret, f)
 	}
 	return ret, nil
+}
+
+func genGif(r io.Reader, ext string, numShapes int, mode primitive.Mode, outFilePath string) (string, error) {
+	out, err := primitive.Transform(r, ext, numShapes, primitive.WithMode(mode))
+	if err != nil {
+		fmt.Println("failed to run primitive")
+		return "", err
+	}
+	dir, fName := filepath.Split(outFilePath)
+	outFile, err := os.Create(dir + "out_" + fName[0:len(fName)-(len(ext)+1)] + ".gif")
+	if err != nil {
+		fmt.Println("failed to create file")
+		return "", err
+	}
+	defer outFile.Close()
+	_, err = io.Copy(outFile, out)
+	if err != nil {
+		panic(err)
+	}
+	return outFile.Name(), nil
 }
 
 func genImage(r io.Reader, ext string, numShapes int, mode primitive.Mode, outFilePath string) (string, error) {
