@@ -76,7 +76,7 @@ func Transform(image io.Reader, ext string, numShapes int, opts ...func() []stri
 }
 
 func primitive(inputFile, outputFile string, numShapes int, args ...string) (string, error) {
-	argStr := fmt.Sprintf("-i %s -o %s -n %d", inputFile, outputFile, numShapes)
+	argStr := fmt.Sprintf("-i %s -o %s -n %d -r 128 -s 512", inputFile, outputFile, numShapes)
 	args = append(strings.Fields(argStr), args...)
 	cmd := exec.Command("primitive", args...)
 	b, err := cmd.CombinedOutput()

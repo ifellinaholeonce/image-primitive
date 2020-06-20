@@ -112,10 +112,10 @@ func main() {
 		if modeStr == "" {
 			DEFAULT_NUM := 10
 			opts = []genOpts{
-				{N: DEFAULT_NUM, M: primitive.ModeBeziers, ShowM: true},
+				{N: DEFAULT_NUM, M: primitive.ModeCircle, ShowM: true},
 				{N: DEFAULT_NUM, M: primitive.ModeCombo, ShowM: true},
 				{N: DEFAULT_NUM, M: primitive.ModeRotatedRect, ShowM: true},
-				{N: DEFAULT_NUM, M: primitive.ModeRotatedEllipse, ShowM: true},
+				{N: DEFAULT_NUM, M: primitive.ModeTriangle, ShowM: true},
 			}
 		}
 
